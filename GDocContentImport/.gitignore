@@ -1,0 +1,3 @@
+﻿# Ignore sensitive configuration files
+appsettings.json
+client_secret.json
