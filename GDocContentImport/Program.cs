@@ -1,38 +1,49 @@
-﻿using GDocContentImport;
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
-class Program
+namespace GDocContentImport
 {
-    static async Task Main(string[] args)
+    class Program
     {
-        // Replace the following with your Google Docs document ID and database connection string.
-        string documentId = "your-google-docs-document-id";
-        string connectionString = "your-database-connection-string";
-
-        // Replace these with the appropriate values for your content database.
-        int projectId = 55657;
-        int pageId = 15869557;
-        string elementId = "MainContent";
-
-        var googleDocsImporter = new GoogleDocsImporter();
-        var contentDatabase = new ContentDatabase(connectionString);
-
-        try
+        static async Task Main(string[] args)
         {
-            Console.WriteLine("Retrieving content from Google Docs...");
-            string content = await googleDocsImporter.GetDocumentContentAsync(documentId);
-            Console.WriteLine("Content retrieved. Inserting into the database...");
+            if (args.Length < 2)
+            {
+                Console.WriteLine("Usage: GDocContentImport <projectId> <documentId>");
+                return;
+            }
 
-            await contentDatabase.InsertContentAsync(projectId, pageId, elementId, content);
-            Console.WriteLine("Content inserted successfully.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"An error occurred: {ex.Message}");
-        }
+            int projectId = int.Parse(args[0]);
+            string documentId = args[1];
 
-        Console.WriteLine("Press any key to exit...");
-        Console.ReadKey();
+            // Load the configuration from the appsettings.json file.
+            IConfiguration configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
+
+            // Get the connection string from the configuration, or use an empty string if it's null.
+            string connectionString = configuration.GetConnectionString("ContentDatabase") ?? string.Empty;
+
+            GoogleDocsImporter googleDocsImporter = new GoogleDocsImporter();
+            ContentDatabase contentDatabase = new ContentDatabase(connectionString);
+
+            string documentContent = await googleDocsImporter.GetDocumentContentAsync(documentId);
+            DocumentContentParser parser = new DocumentContentParser();
+            Dictionary<int, (string ElementId, string Content)> pageContentMap = parser.Parse(documentContent);
+
+            foreach (var entry in pageContentMap)
+            {
+                int pageId = entry.Key;
+                string elementId = entry.Value.ElementId;
+                string content = entry.Value.Content;
+
+                await contentDatabase.InsertContentAsync(projectId, pageId, elementId, content);
+                Console.WriteLine($"Inserted content for PageID: {pageId}, ElementID: {elementId}");
+            }
+        }
     }
 }
