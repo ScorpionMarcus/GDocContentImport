@@ -10,14 +10,13 @@ namespace GDocContentImport
     {
         static async Task Main(string[] args)
         {
-            if (args.Length < 2)
+            if (args.Length < 1)
             {
-                Console.WriteLine("Usage: GDocContentImport <projectId> <documentId>");
+                Console.WriteLine("Usage: GDocContentImport <documentId>");
                 return;
             }
 
-            int projectId = int.Parse(args[0]);
-            string documentId = args[1];
+            string documentId = args[0];
 
             // Load the configuration from the appsettings.json file.
             IConfiguration configuration = new ConfigurationBuilder()
@@ -33,7 +32,7 @@ namespace GDocContentImport
 
             string documentContent = await googleDocsImporter.GetDocumentContentAsync(documentId);
             DocumentContentParser parser = new DocumentContentParser();
-            Dictionary<int, (string ElementId, string Content)> pageContentMap = parser.Parse(documentContent);
+            (int projectId, Dictionary<int, (string ElementId, string Content)> pageContentMap) = parser.Parse(documentContent);
 
             foreach (var entry in pageContentMap)
             {
@@ -41,8 +40,8 @@ namespace GDocContentImport
                 string elementId = entry.Value.ElementId;
                 string content = entry.Value.Content;
 
-                await contentDatabase.InsertContentAsync(projectId, pageId, elementId, content);
-                Console.WriteLine($"Inserted content for PageID: {pageId}, ElementID: {elementId}");
+                await contentDatabase.InsertOrUpdateContentAsync(projectId, pageId, elementId, content);
+                Console.WriteLine($"Processed content for PageID: {pageId}, ElementID: {elementId}");
             }
         }
     }

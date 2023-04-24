@@ -5,11 +5,31 @@ namespace GDocContentImport
 {
     public class DocumentContentParser
     {
-        public Dictionary<int, (string ElementId, string Content)> Parse(string documentContent)
+        public (int ProjectId, Dictionary<int, (string ElementId, string Content)> PageContentMap) Parse(string documentContent)
         {
+            const string projectIdDelimiter = "PROJECTID:";
             const string pageIdDelimiter = "PAGEID:";
             const string elementIdDelimiter = "ELEMENTID:";
-            var sections = documentContent.Split(new[] { pageIdDelimiter }, StringSplitOptions.RemoveEmptyEntries);
+
+            int projectIdIndex = documentContent.IndexOf(projectIdDelimiter);
+            if (projectIdIndex == -1)
+            {
+                throw new InvalidOperationException("ProjectID not found in the Google Doc.");
+            }
+
+            int projectIdEndIndex = documentContent.IndexOf('\n', projectIdIndex);
+            if (projectIdEndIndex == -1)
+            {
+                throw new InvalidOperationException("Invalid Google Doc format.");
+            }
+
+            string projectIdStr = documentContent.Substring(projectIdIndex + projectIdDelimiter.Length, projectIdEndIndex - (projectIdIndex + projectIdDelimiter.Length)).Trim();
+            if (!int.TryParse(projectIdStr, out int projectId))
+            {
+                throw new InvalidOperationException("Invalid ProjectID format in the Google Doc.");
+            }
+
+            var sections = documentContent.Substring(projectIdEndIndex).Split(new[] { pageIdDelimiter }, StringSplitOptions.RemoveEmptyEntries);
             var pageContentMap = new Dictionary<int, (string ElementId, string Content)>();
 
             foreach (var section in sections)
@@ -31,7 +51,7 @@ namespace GDocContentImport
                 pageContentMap[pageId] = (elementId, content);
             }
 
-            return pageContentMap;
+            return (projectId, pageContentMap);
         }
     }
 }
