@@ -32,16 +32,22 @@ namespace GDocContentImport
 
             string documentContent = await googleDocsImporter.GetDocumentContentAsync(documentId);
             DocumentContentParser parser = new DocumentContentParser();
-            (int projectId, Dictionary<int, (string ElementId, string Content)> pageContentMap) = parser.Parse(documentContent);
+            Dictionary<int, Dictionary<int, (string ElementId, string Content)>> projectContentMap = parser.Parse(documentContent);
 
-            foreach (var entry in pageContentMap)
+            foreach (var projectEntry in projectContentMap)
             {
-                int pageId = entry.Key;
-                string elementId = entry.Value.ElementId;
-                string content = entry.Value.Content;
+                int projectId = projectEntry.Key;
+                Dictionary<int, (string ElementId, string Content)> pageContentMap = projectEntry.Value;
 
-                await contentDatabase.InsertOrUpdateContentAsync(projectId, pageId, elementId, content);
-                Console.WriteLine($"Processed content for PageID: {pageId}, ElementID: {elementId}");
+                foreach (var entry in pageContentMap)
+                {
+                    int pageId = entry.Key;
+                    string elementId = entry.Value.ElementId;
+                    string content = entry.Value.Content;
+
+                    await contentDatabase.InsertOrUpdateContentAsync(projectId, pageId, elementId, content);
+                    Console.WriteLine($"Processed content for ProjectID: {projectId}, PageID: {pageId}, ElementID: {elementId}");
+                }
             }
         }
     }

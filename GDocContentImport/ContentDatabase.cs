@@ -65,9 +65,10 @@ namespace GDocContentImport
             else
             {
                 Console.WriteLine($"ElementID {elementId} already exists and has content. Do you want to overwrite the content? (Y/N)");
-                var userInput = Console.ReadLine();
-                if (userInput?.ToUpper() != "Y")
+                var keyInfo = Console.ReadKey();
+                if (keyInfo.Key != ConsoleKey.Y)
                 {
+                    Console.WriteLine(); // Add a new line for better formatting
                     return;
                 }
 
