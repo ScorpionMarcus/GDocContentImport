@@ -1,54 +1,49 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace GDocContentImport
 {
     public class DocumentContentParser
     {
-        public Dictionary<int, Dictionary<int, (string ElementId, string Content)>> Parse(string documentContent)
+        public List<DocumentContent> Parse(string documentContent, int projectId)
         {
-            const string projectIdDelimiter = "PROJECTID:";
-            const string pageIdDelimiter = "PAGEID:";
-            const string elementIdDelimiter = "ELEMENTID:";
+            var parsedContent = new List<DocumentContent>();
 
-            var projectSections = documentContent.Split(new[] { projectIdDelimiter }, StringSplitOptions.RemoveEmptyEntries);
-            var projectContentMap = new Dictionary<int, Dictionary<int, (string ElementId, string Content)>>();
+            var pageSections = Regex.Split(documentContent, @"\n(?=PAGEID:\s*\d+)", RegexOptions.Multiline);
 
-            foreach (var projectSection in projectSections)
+            foreach (var pageSection in pageSections)
             {
-                var lines = projectSection.Split('\n');
-                if (lines.Length < 2) continue;
-
-                string projectIdStr = lines[0].Trim();
-                if (!int.TryParse(projectIdStr, out int projectId)) continue;
-
-                var pageContentMap = new Dictionary<int, (string ElementId, string Content)>();
-                projectContentMap[projectId] = pageContentMap;
-
-                string pageSections = string.Join('\n', lines[1..]);
-                var sections = pageSections.Split(new[] { pageIdDelimiter }, StringSplitOptions.RemoveEmptyEntries);
-
-                foreach (var section in sections)
+                if (string.IsNullOrWhiteSpace(pageSection))
                 {
-                    int elementIdIndex = section.IndexOf(elementIdDelimiter);
-                    if (elementIdIndex == -1) continue;
+                    continue;
+                }
 
-                    int pageIdDelimiterIndex = section.IndexOf('\n');
-                    if (pageIdDelimiterIndex == -1) continue;
+                var pageIdMatch = Regex.Match(pageSection, @"PAGEID:\s*(\d+)");
+                if (!pageIdMatch.Success)
+                {
+                    Console.WriteLine($"Warning: Ignoring line: {pageSection}");
+                    continue;
+                }
 
-                    string pageIdStr = section.Substring(0, pageIdDelimiterIndex).Trim();
-                    if (!int.TryParse(pageIdStr, out int pageId)) continue;
+                int pageId = int.Parse(pageIdMatch.Groups[1].Value);
+                var elementIdMatch = Regex.Match(pageSection, @"ELEMENTID:\s*(\w+)");
+                var contentMatch = Regex.Match(pageSection, @"(?<=ELEMENTID:\s*\w+\s)(.*)");
 
-                    int elementIdDelimiterIndex = section.IndexOf('\n', elementIdIndex);
-                    if (elementIdDelimiterIndex == -1) continue;
-
-                    string elementId = section.Substring(elementIdIndex + elementIdDelimiter.Length, elementIdDelimiterIndex - (elementIdIndex + elementIdDelimiter.Length)).Trim();
-                    string content = section.Substring(elementIdDelimiterIndex + 1).Trim();
-                    pageContentMap[pageId] = (elementId, content);
+                if (elementIdMatch.Success && contentMatch.Success)
+                {
+                    string elementId = elementIdMatch.Groups[1].Value;
+                    string content = contentMatch.Value;
+                    parsedContent.Add(new DocumentContent(projectId, pageId, elementId, content));
+                }
+                else
+                {
+                    Console.WriteLine($"Warning: Ignoring line: {pageSection}");
                 }
             }
 
-            return projectContentMap;
+            return parsedContent;
         }
     }
 }
+

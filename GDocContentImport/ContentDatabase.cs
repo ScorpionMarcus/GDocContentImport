@@ -13,6 +13,27 @@ namespace GDocContentImport
             _connectionString = connectionString;
         }
 
+        public async Task InsertOrUpdateContentAsync(int projectId, int pageId, string elementId, string content)
+        {
+            var (elementExists, elementHasContent) = await CheckElementContentAsync(projectId, pageId, elementId);
+            string query = GetQuery(elementExists, elementHasContent, elementId);
+
+            if (string.IsNullOrEmpty(query))
+            {
+                return;
+            }
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var command = new SqlCommand(query, connection))
+                {
+                    AddParametersToCommand(command, projectId, pageId, elementId, content);
+                    await command.ExecuteNonQueryAsync();
+                }
+            }
+        }
+
         private async Task<(bool Exists, bool HasContent)> CheckElementContentAsync(int projectId, int pageId, string elementId)
         {
             var query = @"
@@ -25,10 +46,7 @@ namespace GDocContentImport
                 await connection.OpenAsync();
                 using (var command = new SqlCommand(query, connection))
                 {
-                    command.Parameters.AddWithValue("@projectId", projectId);
-                    command.Parameters.AddWithValue("@pageId", pageId);
-                    command.Parameters.AddWithValue("@elementId", elementId);
-
+                    AddParametersToCommand(command, projectId, pageId, elementId);
                     using (var reader = await command.ExecuteReaderAsync())
                     {
                         if (await reader.ReadAsync())
@@ -42,25 +60,22 @@ namespace GDocContentImport
             return (false, false);
         }
 
-        public async Task InsertOrUpdateContentAsync(int projectId, int pageId, string elementId, string content)
+        private string GetQuery(bool elementExists, bool elementHasContent, string elementId)
         {
-            var (elementExists, elementHasContent) = await CheckElementContentAsync(projectId, pageId, elementId);
-            string query;
-
             if (!elementExists)
             {
-                query = @"
-                INSERT INTO Cobalt.dbo.Content
-                (ProjectID, PageID, ElementID, Content, LastWrite, ChangedBy, ChangedOn, DateCreated)
-                VALUES
-                (@projectId, @pageId, @elementId, @content, GETDATE(), 'GoogleDocsImporter', GETDATE(), GETDATE())";
+                return @"
+            INSERT INTO Cobalt.dbo.Content
+            (ProjectID, PageID, ElementID, Content, LastWrite, ChangedBy, ChangedOn, DateCreated)
+            VALUES
+            (@projectId, @pageId, @elementId, @content, GETDATE(), 'GoogleDocsImporter', GETDATE(), GETDATE())";
             }
             else if (!elementHasContent)
             {
-                query = @"
-                UPDATE Cobalt.dbo.Content
-                SET Content = @content, LastWrite = GETDATE(), ChangedBy = 'GoogleDocsImporter', ChangedOn = GETDATE()
-                WHERE ProjectID = @projectId AND PageID = @pageId AND ElementID = @elementId";
+                return @"
+            UPDATE Cobalt.dbo.Content
+            SET Content = @content, LastWrite = GETDATE(), ChangedBy = 'GoogleDocsImporter', ChangedOn = GETDATE()
+            WHERE ProjectID = @projectId AND PageID = @pageId AND ElementID = @elementId";
             }
             else
             {
@@ -69,28 +84,25 @@ namespace GDocContentImport
                 if (keyInfo.Key != ConsoleKey.Y)
                 {
                     Console.WriteLine(); // Add a new line for better formatting
-                    return;
+                    return string.Empty;
                 }
 
-                query = @"
-                UPDATE Cobalt.dbo.Content
-                SET Content = @content, LastWrite = GETDATE(), ChangedBy = 'GoogleDocsImporter', ChangedOn = GETDATE()
-                WHERE ProjectID = @projectId AND PageID = @pageId AND ElementID = @elementId";
+                return @"
+            UPDATE Cobalt.dbo.Content
+            SET Content = @content, LastWrite = GETDATE(), ChangedBy = 'GoogleDocsImporter', ChangedOn = GETDATE()
+            WHERE ProjectID = @projectId AND PageID = @pageId AND ElementID = @elementId";
             }
+        }
 
-            using (var connection = new SqlConnection(_connectionString))
+        private void AddParametersToCommand(SqlCommand command, int projectId, int pageId, string elementId, string? content = null)
+        {
+            command.Parameters.AddWithValue("@projectId", projectId);
+            command.Parameters.AddWithValue("@pageId", pageId);
+            command.Parameters.AddWithValue("@elementId", elementId);
+            if (content != null)
             {
-                await connection.OpenAsync();
-                using (var command = new SqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@projectId", projectId);
-                    command.Parameters.AddWithValue("@pageId", pageId);
-                    command.Parameters.AddWithValue("@elementId", elementId);
-                    command.Parameters.AddWithValue("@content", content);
-                    await command.ExecuteNonQueryAsync();
-                }
+                command.Parameters.AddWithValue("@content", content);
             }
         }
     }
 }
-

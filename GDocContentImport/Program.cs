@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -8,47 +7,45 @@ namespace GDocContentImport
 {
     class Program
     {
-        static async Task Main(string[] args)
+        public static async Task Main(string[] args)
         {
-            if (args.Length < 1)
+            if (args.Length < 2)
             {
-                Console.WriteLine("Usage: GDocContentImport <documentId>");
+                Console.WriteLine("Usage: GDocContentImport <GoogleDocID> <ProjectID>");
                 return;
             }
 
-            string documentId = args[0];
+            string googleDocId = args[0];
+            if (!int.TryParse(args[1], out int projectId))
+            {
+                Console.WriteLine("Error: Invalid ProjectID format. ProjectID should be an integer.");
+                return;
+            }
 
-            // Load the configuration from the appsettings.json file.
-            IConfiguration configuration = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .Build();
-
-            // Get the connection string from the configuration, or use an empty string if it's null.
+            IConfiguration configuration = LoadConfiguration();
             string connectionString = configuration.GetConnectionString("ContentDatabase") ?? string.Empty;
 
             GoogleDocsImporter googleDocsImporter = new GoogleDocsImporter();
             ContentDatabase contentDatabase = new ContentDatabase(connectionString);
 
-            string documentContent = await googleDocsImporter.GetDocumentContentAsync(documentId);
+            string documentContent = await googleDocsImporter.GetDocumentContentAsync(googleDocId);
+
             DocumentContentParser parser = new DocumentContentParser();
-            Dictionary<int, Dictionary<int, (string ElementId, string Content)>> projectContentMap = parser.Parse(documentContent);
+            var parsedContent = parser.Parse(documentContent, projectId);
 
-            foreach (var projectEntry in projectContentMap)
+            foreach (var content in parsedContent)
             {
-                int projectId = projectEntry.Key;
-                Dictionary<int, (string ElementId, string Content)> pageContentMap = projectEntry.Value;
-
-                foreach (var entry in pageContentMap)
-                {
-                    int pageId = entry.Key;
-                    string elementId = entry.Value.ElementId;
-                    string content = entry.Value.Content;
-
-                    await contentDatabase.InsertOrUpdateContentAsync(projectId, pageId, elementId, content);
-                    Console.WriteLine($"Processed content for ProjectID: {projectId}, PageID: {pageId}, ElementID: {elementId}");
-                }
+                await contentDatabase.InsertOrUpdateContentAsync(content.ProjectId, content.PageId, content.ElementId, content.Content);
+                Console.WriteLine($"Processed content for ProjectID: {content.ProjectId}, PageID: {content.PageId}, ElementID: {content.ElementId}");
             }
+        }
+
+        private static IConfiguration LoadConfiguration()
+        {
+            return new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
         }
     }
 }
