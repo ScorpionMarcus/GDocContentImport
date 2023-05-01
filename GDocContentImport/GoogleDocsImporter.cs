@@ -11,9 +11,11 @@ namespace GDocContentImport
 {
     internal class GoogleDocsImporter
     {
+        // Define the Google Docs API scopes and application name
         private static readonly string[] Scopes = { DocsService.Scope.DocumentsReadonly };
         private static readonly string ApplicationName = "GoogleDocsContentImporter";
 
+        // Retrieve the content of a Google Doc by its ID
         public async Task<string> GetDocumentContentAsync(string documentId)
         {
             var docsService = await GetDocsServiceAsync();
@@ -21,6 +23,7 @@ namespace GDocContentImport
             return ExtractTextFromDocument(document);
         }
 
+        // Initialize the Google Docs API service
         private async Task<DocsService> GetDocsServiceAsync()
         {
             using (var stream = new FileStream("client_secret.json", FileMode.Open, FileAccess.Read))
@@ -30,6 +33,7 @@ namespace GDocContentImport
             }
         }
 
+        // Authorize the application using the provided client secret file
         private async Task<UserCredential> AuthorizeAsync(Stream clientSecretsStream)
         {
             var credPath = "token.json";
@@ -41,6 +45,7 @@ namespace GDocContentImport
                 new FileDataStore(credPath, true));
         }
 
+        // Create a new Google Docs service instance with the authorized user credentials
         private DocsService CreateDocsService(UserCredential credential)
         {
             return new DocsService(new BaseClientService.Initializer
@@ -50,6 +55,7 @@ namespace GDocContentImport
             });
         }
 
+        // Extract the text content from a Google Docs API document object
         private string ExtractTextFromDocument(Document document)
         {
             var content = new System.Text.StringBuilder();
